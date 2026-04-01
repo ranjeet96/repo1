@@ -1,13 +1,16 @@
 package com.flight.controller;
 
+import com.flight.exception.BookingNotFoundException;
+import com.flight.exception.FlightNotFoundException;
+import com.flight.exception.InsufficientSeatsException;
 import com.flight.model.Booking;
 import com.flight.model.Flight;
 import com.flight.repository.BookingRepository;
 import com.flight.repository.FlightRepository;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/bookings")
@@ -22,20 +25,18 @@ public class BookingController {
     }
 
     @PostMapping
-    public ResponseEntity<Booking> createBooking(@RequestBody BookingRequest request) {
+    public ResponseEntity<Booking> createBooking(@Valid @RequestBody BookingRequest request) {
         Flight flight = flightRepository.findByFlightNumber(request.getFlightNumber())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Flight not found: " + request.getFlightNumber()));
+                .orElseThrow(() -> new FlightNotFoundException(request.getFlightNumber()));
 
-        if (flight.getAvailableSeats() < request.getSeatCount()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Not enough seats available. Requested: " + request.getSeatCount()
-                    + ", Available: " + flight.getAvailableSeats());
+        synchronized (flight) {
+            if (flight.getAvailableSeats() < request.getSeatCount()) {
+                throw new InsufficientSeatsException(request.getSeatCount(), flight.getAvailableSeats());
+            }
+            flight.setAvailableSeats(flight.getAvailableSeats() - request.getSeatCount());
         }
 
-        flight.setAvailableSeats(flight.getAvailableSeats() - request.getSeatCount());
         flightRepository.save(flight);
-
         Booking booking = new Booking(request.getFlightNumber(), request.getPassengerName(), request.getSeatCount());
         bookingRepository.save(booking);
 
@@ -52,8 +53,7 @@ public class BookingController {
     @DeleteMapping("/{bookingId}")
     public ResponseEntity<Void> cancelBooking(@PathVariable String bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Booking not found: " + bookingId));
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
         flightRepository.findByFlightNumber(booking.getFlightNumber()).ifPresent(flight -> {
             flight.setAvailableSeats(flight.getAvailableSeats() + booking.getSeatCount());

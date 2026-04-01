@@ -1,8 +1,8 @@
 package com.flight.controller;
 
+import com.flight.exception.FlightNotFoundException;
 import com.flight.model.Flight;
 import com.flight.repository.FlightRepository;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,9 +23,8 @@ public class FlightController {
     }
 
     @GetMapping("/{flightNumber}")
-    public ResponseEntity<Flight> getFlightByNumber(@PathVariable String flightNumber) {
+    public Flight getFlightByNumber(@PathVariable String flightNumber) {
         return flightRepository.findByFlightNumber(flightNumber)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new FlightNotFoundException(flightNumber));
     }
 }
