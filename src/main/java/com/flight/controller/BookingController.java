@@ -41,4 +41,26 @@ public class BookingController {
 
         return ResponseEntity.status(HttpStatus.CREATED).body(booking);
     }
+
+    @GetMapping("/{bookingId}")
+    public ResponseEntity<Booking> getBooking(@PathVariable String bookingId) {
+        return bookingRepository.findById(bookingId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{bookingId}")
+    public ResponseEntity<Void> cancelBooking(@PathVariable String bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Booking not found: " + bookingId));
+
+        flightRepository.findByFlightNumber(booking.getFlightNumber()).ifPresent(flight -> {
+            flight.setAvailableSeats(flight.getAvailableSeats() + booking.getSeatCount());
+            flightRepository.save(flight);
+        });
+
+        bookingRepository.deleteById(bookingId);
+        return ResponseEntity.noContent().build();
+    }
 }
